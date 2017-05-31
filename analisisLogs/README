@@ -1,0 +1,13 @@
+cd /home/cloudera/workspace/analisisLogs
+mvn clean package
+hdfs dfs -rm -R hadoopMR/analisisLogs*
+hdfs dfs -put data hadoopMR/analisisLogsData
+yarn jar target/hadoop-mr-java-*-job.jar hadoopMR/analisisLogsData hadoopMR/analisisLogsOutput
+
+
+--Realizamos un in-mapper reducer, mejora el rendimiento ya que:
+--	Reducimos el tamaño de los datos intermedios que se pasan al Shuffle and Sort. Menos IO de discos. Menor trafico de datos en red.
+--	Al ser in-mapper combiner reducimos aun mas el IO de discos ya que las agregaciones se realizan en memoria.
+--	No se tiene que realizar tantas operaciones de serialización/deserialización
+--	Puesto que el bloque de datos del HDFS es el estandard 128 MB nos aseguramos que no se va a saturar la memoria. Aunque el tamaño de los ficheros de este ejemplo es demasiado pequeño, sería mas óptimo si tuvieramos un único fichero.
+ 
