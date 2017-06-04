@@ -18,6 +18,7 @@ public class LogReducer extends Reducer<Text, ProcessCounterWritable, Text, Text
 			Reducer<Text, ProcessCounterWritable, Text, Text>.Context context)
 			throws IOException, InterruptedException {
 		Integer iCounter;
+		
 		for(ProcessCounterWritable val : values) {
 			//HacerOtroHashtable
 			iCounter = hProcess.get(val.getProcess());
@@ -39,10 +40,15 @@ public class LogReducer extends Reducer<Text, ProcessCounterWritable, Text, Text
 			context.getCounter("Component Counters", entry.getKey()).increment(entry.getValue());
 		}
 		
+		//Quitamos la ultima coma
+		sOutputValue = sOutputValue.substring(0, sOutputValue.length() - 1);
+				
 		outputKey.set("[" + key.toString() + "]");
 		outputValue.set(sOutputValue);
 		
 		context.write(outputKey, outputValue);
+		
+		hProcess.clear();
 	}
 	
 }

@@ -17,7 +17,7 @@ public class LogMapper extends
 		Mapper<LongWritable, Text, Text, ProcessCounterWritable> {
 
 	private static Logger logger = Logger.getLogger(LogMapper.class);
-	private HashMap<String, HashMap<String, Integer>> buffer;
+	private HashMap<String, Integer> buffer;
 	private Text outputKey = new Text();
 	private ProcessCounterWritable outputValue = new ProcessCounterWritable();
 
@@ -27,7 +27,7 @@ public class LogMapper extends
 			throws IOException, InterruptedException {
 		// Instanciamos una tabla hash que servira de buffer del in-mapper
 		// reducer
-		buffer = new HashMap<String, HashMap<String, Integer>>();
+		buffer = new HashMap<String, Integer>();
 	}
 
 	@Override
@@ -40,55 +40,41 @@ public class LogMapper extends
 		// Recuperamos los valores de la linea de log separados por comas
 		String[] words = value.toString().split(" ");
 
-		String sFechaLog;
-		String sBufferKey;
-		HashMap<String, Integer> hBufferValue;
-		Integer iProcessNum;
 		Date dFechaLog;
 		SimpleDateFormat sdf;
-
+		String sFechaLog;
+		String sComponentName;
+		String sBufferKey;
+		Integer iBufferValue;
+		
 		try {
 			// Recuperamos el nombre del componente
-			String sProcessName = words[4].split("[\\[:]")[0];
+			sComponentName = words[4].split("[\\[:]")[0];
 
 			// Si el nombre del componente contiene vmnet no se guarda
-			if (!sProcessName.contains("vmnet")) {
+			if (!sComponentName.contains("vmnet")) {
 				
-				// Convertimos la fecha a nuestra key
+				// Convertimos la fecha al formato deseado
 				sdf = new SimpleDateFormat("yyyy-MMM-dd HH");
 				sFechaLog = "2014-" + words[0] + "-" + words[1] + " "
 						+ words[2];
 				dFechaLog = sdf.parse(sFechaLog);
 				sdf.applyPattern("dd/MM/yyyy-HH");
+				
+				//Creamos la clave de nuestro buffer del in-mapper combiner
+				//La clave esta formada por fecha-hora;nombreComponente
+				sBufferKey = sdf.format(dFechaLog) + ";" + sComponentName;
 
 				// Buscamos la clave en el buffer
-				sBufferKey = sdf.format(dFechaLog);
-				hBufferValue = buffer.get(sBufferKey);
+				iBufferValue = buffer.get(sBufferKey);
 
-				// Si la fecha no se encuentra insertamos la fecha y como valor
-				// un hashtable con el proceso y un 1
-				if (hBufferValue == null) {
-					hBufferValue = new HashMap<String, Integer>();
-					hBufferValue.put(sProcessName, 1);
-					buffer.put(sBufferKey, hBufferValue);
+				// Si la clave no se encuentra insertamos un 1 como valor
+				if (iBufferValue == null) {
+					buffer.put(sBufferKey, 1);
 				}
-				// Si la fecha se encuentra
+				// Si se encuentra la clave incrementamos su valor en 1
 				else {
-					// Buscamos el proceso para esa fecha
-					iProcessNum = hBufferValue.get(sProcessName);
-
-					// Si no encontramos el proceso para esa fecha insertamos
-					// con un 1
-					if (iProcessNum == null) {
-						hBufferValue.put(sProcessName, 1);
-					}
-					// Si encontrmaos el proceso para esa fecha incrementamos el
-					// valor en 1
-					else {
-						hBufferValue.put(sProcessName, iProcessNum + 1);
-					}
-
-					buffer.put(sBufferKey, hBufferValue);
+					buffer.put(sBufferKey, iBufferValue + 1);
 				}
 			}
 
@@ -111,15 +97,20 @@ public class LogMapper extends
 			Mapper<LongWritable, Text, Text, ProcessCounterWritable>.Context context)
 			throws IOException, InterruptedException {
 
+		String[] sArrayFechaComponente;
+		
 		// Recorremos el buffer del in-mapper reducer
-		for (Entry<String, HashMap<String, Integer>> entry : buffer.entrySet()) {
-			// Guardamos los datos de salida del mapper
-			for (Entry<String, Integer> entry2 : entry.getValue().entrySet()) {
-				outputKey.set(entry.getKey());
-				outputValue.setProcess(entry2.getKey());
-				outputValue.setCounter(entry2.getValue());
-				context.write(outputKey, outputValue);
-			}
+		for (Entry<String, Integer> entry : buffer.entrySet()) {
+			
+			//La salida del in-mapper combiner tendra la fecha-hora como clave
+			sArrayFechaComponente = entry.getKey().split(";");
+			outputKey.set(sArrayFechaComponente[0]);
+			
+			//Como valor un objeto writable que guarda nombre componente y contador
+			outputValue.setProcess(sArrayFechaComponente[1]);
+			outputValue.setCounter(entry.getValue());
+			
+			context.write(outputKey, outputValue);
 		}
 	}
 
